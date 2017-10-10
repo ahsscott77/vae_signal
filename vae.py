@@ -1,52 +1,18 @@
 
 import tensorflow as tf
 import numpy as np
-from scipy import signal
-from scipy import misc
-import cv2
-import matplotlib.pyplot as plt
+# from scipy import signal
+# from scipy import misc
+# import cv2
+# import matplotlib.pyplot as plt
 import pickle
 
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=9):
-    nyq =  fs/2.0
-    low = lowcut / nyq
-    high = highcut / nyq
-    #print('lowcut '+repr(lowcut))
-    #print('highcut '+repr(highcut))
-    #print('low ' + repr(low))
-    #print('high ' + repr(high))
-    #y=np.zeros(data.shape)
-    try:
-        b, a = signal.butter(order, [low, high], btype='band')
-        y = signal.lfilter(b, a, data)
-    except ValueError:
-        print('barf')
-    return y
 
-
-
-def spectrogram(x, lowcut, highcut,fs,int_time=512,novrlp=256):
-    y = butter_bandpass_filter(x, lowcut, highcut, fs, order=5)
-    #noise_power = n_p * fs / 2
-    #y += np.random.normal(scale=np.sqrt(noise_power), size=len(y))
-    f, t, Sxx = signal.spectrogram(y, fs=fs, window='hamming', nperseg=int_time, noverlap=novrlp)
-    n = 84
-
-    Sxx_re = misc.imresize(Sxx, (n, n))
-    IMAGE_SIZE=(84,84)
-    Sxx_re=cv2.resize(Sxx_re, IMAGE_SIZE[::-1])
-    cmap = plt.get_cmap('jet')
-    rgba_img = cmap(Sxx_re)
-    rgb_img = np.delete(rgba_img, 3, 2)
-    Sxx_re = cv2.resize(rgb_img, IMAGE_SIZE[::-1])
-    return Sxx_re
 
 np.random.seed(0)
 tf.set_random_seed(0)
 
-import input_data
-mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-n_samples = mnist.train.num_examples
+
 
 
 # waveform_data1=pickle.load(open('/home/new_sjohnston/waveform_data_fs_10000_10000_data_points_1.out','rb'))
@@ -353,6 +319,11 @@ def train_mnist(network_architecture, learning_rate=0.001,
                                  learning_rate=learning_rate,
                                  batch_size=batch_size,
                                  num_layers = num_layers)
+    #i put this in here so it will still work, but it won't be loaded when not using mnist
+    import input_data
+    mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
+    n_samples = mnist.train.num_examples
+
     # Training cycle
     for epoch in range(training_epochs):
         avg_cost = 0.
@@ -373,7 +344,7 @@ def train_mnist(network_architecture, learning_rate=0.001,
     return vae
 
 def train(network_architecture, learning_rate=0.001,
-          batch_size=100, training_epochs=10, display_step=5, num_layers=2):
+          batch_size=100, training_epochs=10, display_step=5, num_layers=2,file_prefix='no_file.out'):
     vae = VariationalAutoencoder(network_architecture,
                                  learning_rate=learning_rate,
                                  batch_size=batch_size,
@@ -383,27 +354,12 @@ def train(network_architecture, learning_rate=0.001,
     #batch_xs is a matrix that is batch_size by len of each example
     waveform_data=dict()
     for t in [0, 1, 2,3]:
-        if t == 0:
-            waveform_data[t] = pickle.load(
-                open('/home/new_sjohnston/waveform_data_fs_10000_10000_data_points_nonoverlapping_low_noise_0.out', 'rb'))
-
-        elif t == 1:
-            waveform_data[t] = pickle.load(
-                open('/home/new_sjohnston/waveform_data_fs_10000_10000_data_points_nonoverlapping_low_noise_1.out', 'rb'))
-        elif t == 2:
-            waveform_data[t] = pickle.load(open(
-                '/home/new_sjohnston/waveform_data_fs_10000_10000_data_points_nonoverlapping_low_noise_2.out',
-                'rb'))
-        elif t == 3:
-            waveform_data[t] = pickle.load(open(
-                '/home/new_sjohnston/waveform_data_fs_10000_10000_data_points_nonoverlapping_low_noise_3.out',
-                'rb'))
-
-
+        waveform_data[t] = pickle.load(open(file_prefix +repr(t)+'.out', 'rb'))
 
 
     for epoch in range(training_epochs):
         #for m in [0]:#-1.0, -0.5, 0.0, 0.5, 1.0
+        #this is for different noise means, off right now
         m=0.0
         avg_cost = 0.
         total_batch = int(n_samples / batch_size)
@@ -411,6 +367,7 @@ def train(network_architecture, learning_rate=0.001,
         for i in range(total_batch):
             #batch_xs, _ = mnist.train.next_batch(batch_size)
             for tt in [0,1,2,3]:
+                #have to put the signal between 0-1
                 max_val_signal = waveform_data[tt][2]
                 #max_val_fft = waveform_data[tt][3]
                 batch_xs=get_waveform_batch(waveform_data[tt][0],i*batch_size,batch_size,m)
@@ -431,74 +388,10 @@ def train(network_architecture, learning_rate=0.001,
 
 
 
-network_architecture_20_400 = \
-    dict(n_hidden_recog_1=400, # 1st layer encoder neurons
-         n_hidden_recog_2=400, # 2nd layer encoder neurons
-         n_hidden_gener_1=400, # 1st layer decoder neurons
-         n_hidden_gener_2=400, # 2nd layer decoder neurons
-         n_input=1024, # MNIST data input (img shape: 28*28)
-         n_z=20)  # dimensionality of latent space
 
-network_architecture_5_300 = \
-    dict(n_hidden_recog_1=300, # 1st layer encoder neurons
-         n_hidden_recog_2=300, # 2nd layer encoder neurons
-         n_hidden_gener_1=300, # 1st layer decoder neurons
-         n_hidden_gener_2=300, # 2nd layer decoder neurons
-         n_input=1024, # MNIST data input (img shape: 28*28)
-         n_z=5)
-
-network_architecture_10_300 = \
-    dict(n_hidden_recog_1=300, # 1st layer encoder neurons
-         n_hidden_recog_2=300, # 2nd layer encoder neurons
-         n_hidden_gener_1=300, # 1st layer decoder neurons
-         n_hidden_gener_2=300, # 2nd layer decoder neurons
-         n_input=1024, # MNIST data input (img shape: 28*28)
-         n_z=10)
-
-network_architecture_20_200 = \
-    dict(n_hidden_recog_1=200, # 1st layer encoder neurons
-         n_hidden_recog_2=200, # 2nd layer encoder neurons
-         n_hidden_gener_1=200, # 1st layer decoder neurons
-         n_hidden_gener_2=200, # 2nd layer decoder neurons
-         n_input=1024, # MNIST data input (img shape: 28*28)
-         n_z=20)
-
-network_architecture_20_300_200_100 = \
-    dict(n_hidden_recog_1=300, # 1st layer encoder neurons
-         n_hidden_recog_2=200, # 2nd layer encoder neurons
-         n_hidden_recog_3=100, # 2nd layer encoder neurons
-         n_hidden_gener_1=100, # 1st layer decoder neurons
-         n_hidden_gener_2=200, # 2nd layer decoder neurons
-         n_hidden_gener_3=300,  # 2nd layer decoder neurons
-         n_input=1024, # MNIST data input (img shape: 28*28)
-         n_z=20)
-
-network_architecture_2_300_200_100 = \
-    dict(n_hidden_recog_1=300, # 1st layer encoder neurons
-         n_hidden_recog_2=200, # 2nd layer encoder neurons
-         n_hidden_recog_3=100, # 2nd layer encoder neurons
-         n_hidden_gener_1=100, # 1st layer decoder neurons
-         n_hidden_gener_2=200, # 2nd layer decoder neurons
-         n_hidden_gener_3=300,  # 2nd layer decoder neurons
-         n_input=1024, # MNIST data input (img shape: 28*28)
-         n_z=2)
-#vae_low_noise=vae_3
-#vae_3 = train(network_architecture, training_epochs=50)
-
-network_architecture_mnist = \
-    dict(n_hidden_recog_1=500, # 1st layer encoder neurons
-         n_hidden_recog_2=500, # 2nd layer encoder neurons
-         n_hidden_gener_1=500, # 1st layer decoder neurons
-         n_hidden_gener_2=500, # 2nd layer decoder neurons
-         n_input=28*28, # MNIST data input (img shape: 28*28)
-         n_z=20)  # dimensionality of latent space
-
-vae_low_noise_20_400 = train(network_architecture_20_400, training_epochs=50)
-vae_mid_noise_5_300 = train(network_architecture_5_300, training_epochs=50)
-vae_mid_noise_10_300 = train(network_architecture_10_300, training_epochs=50)
-vae_mid_noise_20_200 = train(network_architecture_20_200, training_epochs=50)
-vae_low_noise_2_300_200_100 = train(network_architecture_2_300_200_100, training_epochs=50,num_layers=3)
-vae_mid_noise_5_300_200 = train(network_architecture_5_300_200, training_epochs=50)
+########
+#this was a bunch of test code
+#I moved the part that I want to use to "train_and_test_vae.py"
 
 
 #vae_20_fft=vae_2
@@ -517,52 +410,52 @@ vae_mid_noise_5_300_200 = train(network_architecture_5_300_200, training_epochs=
 #     return np.real(np.fft.ifft(c_data))
 
 # #vae_30=vae_2
-test_case=13
-col_count=0
-plt.figure()
-for b in [1,2,3,4,5]:
-
-    col_count = col_count+1
-    for t in [0,1,2,3]:
-        if t == 0:
-            waveform_data = pickle.load(open('/home/new_sjohnston/waveform_data_fs_10000_100_data_points_nonoverlapping_low_noise_channel_0.out','rb'))
-            max_val_signal = waveform_data[2]
-            max_val_fft = waveform_data[3]
-            lowcut = 400
-            highcut = 5e3
-        elif t == 1:
-            waveform_data = pickle.load(open('/home/new_sjohnston/waveform_data_fs_10000_100_data_points_nonoverlapping_low_noise_channel_1.out','rb'))
-            max_val_signal = waveform_data[2]
-            max_val_fft = waveform_data[3]
-            lowcut = 400
-            highcut = 5e3
-        elif t == 2:
-            waveform_data = pickle.load(open('/home/new_sjohnston/waveform_data_fs_10000_100_data_points_nonoverlapping_low_noise_channel_2.out','rb'))
-            max_val_signal = waveform_data[2]
-            max_val_fft = waveform_data[3]
-            lowcut = 400
-            highcut = 5e3
-        elif t == 3:
-            waveform_data = pickle.load(open('/home/new_sjohnston/waveform_data_fs_10000_100_data_points_nonoverlapping_low_noise_channel_3.out','rb'))
-            max_val_signal = waveform_data[2]
-            max_val_fft = waveform_data[3]
-            lowcut = 400
-            highcut = 5e3
-
-        batch_xs_test=get_waveform_batch(waveform_data[0],0,100,0.0)
-        #batch_xs_test_1 = get_waveform_fft_batch(waveform_data[1], 57 * 1, 1, -1.0)
-
-        # batch_xs_test_1_real = batch_xs_test_1[range(int(len(batch_xs_test_1)/2))]
-        # batch_xs_test_1_imag = batch_xs_test_1[np.array(range(int(len(batch_xs_test_1) / 2)))+int(len(batch_xs_test_1) / 2)]
-        # batch_xs_test_1_comp = batch_xs_test_1_real + 1j*batch_xs_test_1_imag
-        # #batch_xs_rescale_1=batch_xs_test_1 * (max_val_signal*2)-max_val_signal
-        #x_reconstruct_11 = vae_2.reconstruct( (batch_xs_test_1 + max_val_signal) / (max_val_signal * 2))
-        #x_reconstruct_signal = vae_low_noise_20_300_200_100.reconstruct( (batch_xs_test_1 + max_val_signal) / (max_val_signal * 2))
-        vae_codes = vae_low_noise_2_300_200_100.transform(batch_xs_test)
-        plt.figure()
-        for i in range(2):
-            # plt.subplot(20,1,i+1)
-            plt.plot(vae_codes[:, i])
+# test_case=13
+# col_count=0
+# plt.figure()
+# for b in [1,2,3,4,5]:
+#
+#     col_count = col_count+1
+#     for t in [0,1,2,3]:
+#         if t == 0:
+#             waveform_data = pickle.load(open('/home/new_sjohnston/waveform_data_fs_10000_100_data_points_nonoverlapping_low_noise_channel_0.out','rb'))
+#             max_val_signal = waveform_data[2]
+#             max_val_fft = waveform_data[3]
+#             lowcut = 400
+#             highcut = 5e3
+#         elif t == 1:
+#             waveform_data = pickle.load(open('/home/new_sjohnston/waveform_data_fs_10000_100_data_points_nonoverlapping_low_noise_channel_1.out','rb'))
+#             max_val_signal = waveform_data[2]
+#             max_val_fft = waveform_data[3]
+#             lowcut = 400
+#             highcut = 5e3
+#         elif t == 2:
+#             waveform_data = pickle.load(open('/home/new_sjohnston/waveform_data_fs_10000_100_data_points_nonoverlapping_low_noise_channel_2.out','rb'))
+#             max_val_signal = waveform_data[2]
+#             max_val_fft = waveform_data[3]
+#             lowcut = 400
+#             highcut = 5e3
+#         elif t == 3:
+#             waveform_data = pickle.load(open('/home/new_sjohnston/waveform_data_fs_10000_100_data_points_nonoverlapping_low_noise_channel_3.out','rb'))
+#             max_val_signal = waveform_data[2]
+#             max_val_fft = waveform_data[3]
+#             lowcut = 400
+#             highcut = 5e3
+#
+#         batch_xs_test=get_waveform_batch(waveform_data[0],0,100,0.0)
+#         #batch_xs_test_1 = get_waveform_fft_batch(waveform_data[1], 57 * 1, 1, -1.0)
+#
+#         # batch_xs_test_1_real = batch_xs_test_1[range(int(len(batch_xs_test_1)/2))]
+#         # batch_xs_test_1_imag = batch_xs_test_1[np.array(range(int(len(batch_xs_test_1) / 2)))+int(len(batch_xs_test_1) / 2)]
+#         # batch_xs_test_1_comp = batch_xs_test_1_real + 1j*batch_xs_test_1_imag
+#         # #batch_xs_rescale_1=batch_xs_test_1 * (max_val_signal*2)-max_val_signal
+#         #x_reconstruct_11 = vae_2.reconstruct( (batch_xs_test_1 + max_val_signal) / (max_val_signal * 2))
+#         #x_reconstruct_signal = vae_low_noise_20_300_200_100.reconstruct( (batch_xs_test_1 + max_val_signal) / (max_val_signal * 2))
+#         vae_codes = vae_low_noise_2_300_200_100.transform(batch_xs_test)
+#         plt.figure()
+#         for i in range(2):
+#             # plt.subplot(20,1,i+1)
+#             plt.plot(vae_codes[:, i])
         # print('cw')
         # print(sum(vae_codes[:,cw]>3)/100)
         # print('down')

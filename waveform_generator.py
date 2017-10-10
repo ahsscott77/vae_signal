@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import numpy as np
 from scipy import signal
 
@@ -6,44 +7,46 @@ import cv2
 import matplotlib.pyplot as plt
 import pickle
 
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=9):
-    nyq =  fs/2.0
-    low = lowcut / nyq
-    high = highcut / nyq
-    #print('lowcut '+repr(lowcut))
-    #print('highcut '+repr(highcut))
-    #print('low ' + repr(low))
-    #print('high ' + repr(high))
-    #y=np.zeros(data.shape)
-    try:
-        b, a = signal.butter(order, [low, high], btype='band')
-        y = signal.lfilter(b, a, data)
-    except ValueError:
-        print('barf')
-    return y
+import sys
+
+# def butter_bandpass_filter(data, lowcut, highcut, fs, order=9):
+#     nyq =  fs/2.0
+#     low = lowcut / nyq
+#     high = highcut / nyq
+#     #print('lowcut '+repr(lowcut))
+#     #print('highcut '+repr(highcut))
+#     #print('low ' + repr(low))
+#     #print('high ' + repr(high))
+#     #y=np.zeros(data.shape)
+#     try:
+#         b, a = signal.butter(order, [low, high], btype='band')
+#         y = signal.lfilter(b, a, data)
+#     except ValueError:
+#         print('barf')
+#     return y
+#
+#
+#
+# def spectrogram(x, lowcut, highcut,fs,int_time=512,novrlp=256):
+#     y = butter_bandpass_filter(x, lowcut, highcut, fs, order=5)
+#     #noise_power = n_p * fs / 2
+#     #y += np.random.normal(scale=np.sqrt(noise_power), size=len(y))
+#     f, t, Sxx = signal.spectrogram(y, fs=fs, window='hamming', nperseg=int_time, noverlap=novrlp)
+#     n = 84
+#
+#     Sxx_re = misc.imresize(Sxx, (n, n))
+#     IMAGE_SIZE=(84,84)
+#     Sxx_re=cv2.resize(Sxx_re, IMAGE_SIZE[::-1])
+#     cmap = plt.get_cmap('jet')
+#     rgba_img = cmap(Sxx_re)
+#     rgb_img = np.delete(rgba_img, 3, 2)
+#     Sxx_re = cv2.resize(rgb_img, IMAGE_SIZE[::-1])
+#     return Sxx_re
 
 
 
-def spectrogram(x, lowcut, highcut,fs,int_time=512,novrlp=256):
-    y = butter_bandpass_filter(x, lowcut, highcut, fs, order=5)
-    #noise_power = n_p * fs / 2
-    #y += np.random.normal(scale=np.sqrt(noise_power), size=len(y))
-    f, t, Sxx = signal.spectrogram(y, fs=fs, window='hamming', nperseg=int_time, noverlap=novrlp)
-    n = 84
 
-    Sxx_re = misc.imresize(Sxx, (n, n))
-    IMAGE_SIZE=(84,84)
-    Sxx_re=cv2.resize(Sxx_re, IMAGE_SIZE[::-1])
-    cmap = plt.get_cmap('jet')
-    rgba_img = cmap(Sxx_re)
-    rgb_img = np.delete(rgba_img, 3, 2)
-    Sxx_re = cv2.resize(rgb_img, IMAGE_SIZE[::-1])
-    return Sxx_re
-
-
-
-
-def generate_data(type,fc,bw,N,n_p,n_mean,fs):
+def generate_data(type,N,n_p,n_mean,fs):
     #create a signal by adding a waveform to noise and later interference
     amp = 2 * np.sqrt(2)
     noise_power = n_p * fs / 2
@@ -109,7 +112,7 @@ def generate_data(type,fc,bw,N,n_p,n_mean,fs):
     return x
 
 
-def generate_multipath_channel(num_paths,ratio_direct_to_others,N):
+def generate_multipath_channel(num_paths,N):
     #doing real amplitudes, no phase change
     #set the direct path to one and use the ratio to set the other
     tap1=1
@@ -127,59 +130,69 @@ def generate_multipath_channel(num_paths,ratio_direct_to_others,N):
     denom=np.hstack((1,np.zeros(N-1,)))
     return channel,denom
 
-N=1024
-fs=10000
-for t in [0,1,2,3]:
-    signal_dict = dict()
-    fft_dict = dict()
-    #template_dict = dict()
-    #spectro_dict = dict()
-    max_val_signal = 0
-    max_val_fft = 0
-    n_p_vec = np.random.uniform(1e-3,1e-2,100)
-    for m in [0]:#-1,-0.5,0.0,0.5,1.0
-        print(m)
-        for i in range(100):
-            bw = np.round(np.random.randint(200,1000))
-            fc = np.round(np.random.randint(1100,2900))
-            int_time = 2**np.random.randint(6,10)
-            ovrlp = int_time/2
-            lowcut = fc - bw / 2.0
 
-            #n_p=n_p_vec[i]
-            highcut = fc + bw / 2.0
-            # if t==3:
-            #     n_p=np.random.uniform()/100.0
-            # else:
-            n_p=1e-5
-            num_paths = int(np.round(np.random.uniform(0.5,5.49)))
-            power_ratio = np.random.uniform(1.5,3.5)
-            x=generate_data(t,fc,bw,N,n_p,m,fs)
 
-            channel1, denom1 = generate_multipath_channel(num_paths, power_ratio, N)
-            x=signal.filtfilt(channel1,denom1,x,padlen=256)
-            # plt.figure()
-            # plt.imshow(template)
-            # plt.show()
-            #
-            # plt.figure()
-            # plt.plot(x)
-            # plt.show()
 
-            #spectro=spectrogram(x, lowcut, highcut, fs, int_time=int_time, novrlp=ovrlp)
-            max_x=np.amax(np.abs(x))
-            if max_x>max_val_signal:
-                max_val_signal=max_x
+def write_out_data(train_or_test):
+    if train_or_test=='train':
+        num_signals=10000
+        file_prefix = 'waveform_data_fs_10000_' + repr(num_signals) + '_data_points_nonoverlapping_low_noise_'
+    else:
+        num_signals=100
+        file_prefix = 'waveform_data_fs_10000_' + repr(num_signals) + '_data_points_nonoverlapping_low_noise_channel_'
 
-            signal_dict[(m,i)]=x
 
-            Y = np.fft.fft(x)
-            max_Y = np.max((np.amax(np.real(Y)),np.amax(np.imag(Y))))
-            if max_Y > max_val_fft:
-                max_val_fft = max_Y
 
-            fft_dict[(m, i)] = Y
-            #template_dict[(m,i)]=template
-            #spectro_dict[(t,m,i)]=(fc,bw,spectro)
-    pickle.dump((signal_dict,fft_dict,max_val_signal,max_val_fft),open('waveform_data_fs_10000_100_data_points_nonoverlapping_low_noise_channel_'+repr(t)+'.out','wb'))
+    N=1024
+    fs=10000
+    n_p=1e-5
+    for t in [0,1,2,3]:
+        signal_dict = dict()
+        fft_dict = dict()
+        #template_dict = dict()
+        #spectro_dict = dict()
+        max_val_signal = 0
+        max_val_fft = 0
+        #n_p_vec = np.random.uniform(1e-3,1e-2,100)
+        #can do different noise means
+        for m in [0]:#-1,-0.5,0.0,0.5,1.0
+            #print(m)
+            for i in range(num_signals):
+                x = generate_data(t, N, n_p, m, fs)
+                #if test apply channel
+                if train_or_test=='test':
+                    num_paths = int(np.round(np.random.uniform(0.5,5.49)))
+                    #power_ratio = np.random.uniform(1.5,3.5)
 
+                    channel1, denom1 = generate_multipath_channel(num_paths, N)
+                    x=signal.filtfilt(channel1,denom1,x,padlen=256)
+
+                max_x=np.amax(np.abs(x))
+                if max_x>max_val_signal:
+                    max_val_signal=max_x
+
+                signal_dict[(m,i)]=x
+
+                Y = np.fft.fft(x)
+                max_Y = np.max((np.amax(np.real(Y)),np.amax(np.imag(Y))))
+                if max_Y > max_val_fft:
+                    max_val_fft = max_Y
+
+                fft_dict[(m, i)] = Y
+
+        data_out=(signal_dict,fft_dict,max_val_signal,max_val_fft)
+        pickle.dump(data_out,open(file_prefix+repr(t)+'.out','wb'))
+
+
+
+    #bw = np.round(np.random.randint(200,1000))
+                #fc = np.round(np.random.randint(1100,2900))
+                #nt_time = 2**np.random.randint(6,10)
+                #ovrlp = int_time/2
+                #lowcut = fc - bw / 2.0
+
+                #n_p=n_p_vec[i]
+                #highcut = fc + bw / 2.0
+                # if t==3:
+                #     n_p=np.random.uniform()/100.0
+                # else:
