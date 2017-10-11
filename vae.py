@@ -24,7 +24,9 @@ n_samples = 10000
 def get_waveform_batch(wave_dict,sample,batch_size,m):
     batch=np.zeros([batch_size,1024])
     for i in range(batch_size):
-        batch[i,:]=wave_dict[m,i+sample]
+        sig = wave_dict[m, i + sample]
+        max_val = np.max(np.abs(sig))
+        batch[i, :] = (sig + max_val) / (2 * max_val)
     return batch
 
 def get_waveform_fft_batch(wave_dict,sample,batch_size,m):
